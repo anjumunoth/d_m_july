@@ -1,0 +1,342 @@
+Why nosql ???
+-- schemaless (flexible schema)
+-- no structure for table; no fixed number of columns; 
+-- no restriction on values for each column
+-- easily scalable -- to add more nodes
+-- as business grows -- improve the infrastructure
+-- horizontal and vertical scaling
+-- different types of data -- structured, semi, no structured
+-- images, comments, videos, friends, status
+-- RDBMS -- images -- BLOB,CLOB; table ; normalisation; transaction db; performance intensive
+-- horizontal scaling 
+-- volume of data 
+-- big data
+-- sharding of data -- partitioning of data
+break up the data and store it in physical of data
+-- replication of data 
+-- supports cloud version and various cloud provides 
+-- Does not support joins
+-- most of the dbs NOT ACID compliant
+-- not suitable for transaction kind of info
+-- adhere to CAP theorem
+
+vertical scaling
+-- single server -- increase the CPU and memory
+Adv: single source of data; data -- consistent
+Disadv: 
+--infrastructure restrictions
+--requires downtime during scaling; 
+--costlier 
+--single server goes down -- writes/reads fail
+--
+
+horizontal scaling : same data is multiple servers
+-- multiple servers -- increase/decrease the number of nodes
+Adv: 
+--availability
+scaling dynamically(whenever the need arises); cost effective
+Disadv or limitation: synchronisation of various servers
+maintainance is complex 
+-- maintaining of consistency of data -- complex
+
+mongodb :
+master slave architecture
+one primary and multiple secondaries
+primary -- handle writes/reads
+secondary -- handle reads(configure)
+primary goes down -- automatic failover -- election happen-- eligible sec will become primary
+
+
+
+Cost:
+samsung a5 64gb -- 25000
+samsung a5 512gb -- 50000
+
+Walmart black friday sale:
+normal day -- 1 million sales
+black friday week -- 10 million sales
+next week -- 1 million sales
+
+vertical scaling:
+1 million sales -- 1 tb server
+black friday sale -- 10 tb server
+next week -- 1 tb server
+
+horizontal scaling:
+1 million sales -- 10 servers
+black friday sale -- 25 servers
+next week -- 10 servers
+
+Example deployment
+25 servers -- need not have infrastructure
+5 server -- can become primary; 1tb memory
+20 servers -- 512gb memory;
+
+Server in mongodb : 2 properties
+1. priority: 0 or higher
+2. Eligible to voting:
+primary server -- server with the highest priority
+
+Sharding:
+c: professional data
+d: personal data
+c:/project1; c:/project2
+d:/images; d:/videos
+Adv: faster retrieval; organised way of storing data
+mongodb: break up data and store it in different shards:
+full table scan can be avoided; targeted reads/writes
+huge volumes of data which cannot fit in a single server
+
+sharding in mongodb:
+shard server 
+-- multiple in number
+-- hold the original data
+config server(replica set)
+-- one config server
+-- hold the metadata- which shard has which data
+mongos -- stateless router; multiple mongos
+
+client -- read query --> mongos --> ask the config server for the metadata for this query --> config server will return the metadata to mongos --> mongos will contact only the respective shards that hold teh required data--> shards will return the data --> mongos will return the data to the client
+
+
+Mongodb:
+-- aggregation pipeline
+-- various kind of indexes
+-- replication and sharding
+-- gridfs -- images and videos
+-- schema of data -- embedded model and referenced model
+-- not ACID compliant
+-- no rollback; no save point; auto commit
+-- Atomicity(all the op or none of them) , consistency, Isolation, durability
+
+
+transfer X amount A to B
+debit A 
+credit B
+
+transaction :
+debit A ; server has gown down ; rollback of debit A
+
+
+Employee:
+fixed schema -- RDBMS
+BK -- working; playing games
+Shikha -- running,cooking
+Manohar --playing snookers, watching cricket,cooking
+Satish --tv, movies, long drive, travelling, cooking
+
+
+1 NF -- no multi valued attributes
+2 tables
+EmployeeDetails(empname,hobbyId)
+BK h1
+BK h2
+Shikha h3
+Manohar h4
+Satish h4
+Hobby(hobbyId, description)
+h1 working
+h2 playing games
+h3 running
+h4 cooking
+
+nosql -- convinient -- no schema 
+mongodb --
+{empName:"BK", hobbies:["working","playing games"]}
+{empName:"Shikha",hobbies:["running","cooking"]}
+{empName:"Manohar",hobbies:["playing snookers", "watching cricket","cooking"]}
+Satish --tv, movies, long drive, travelling, cooking
+
+shopping cart:
+customer
+orders
+products
+
+mongodb:
+no joins:
+how is data stored:
+Embedded model:
+
+customer collection:
+{custId:101,custName:"sara",address:"20,rr,india",
+orders:
+[
+{
+	orderId: "CB101",
+	orderAmt:45678,
+	orderDate:24-01-2022,
+	subItems:[
+		{productId:"P101",price:78,quantity:2},
+		{productId:"P112",price:178,quantity:5}
+	]
+},
+{
+	orderId: "CB156",
+	orderAmt:123,
+	orderDate:24-5-2022,
+	subItems:[
+		{productId:"P111",price:123,quantity:1}
+	]
+}
+]
+}
+
+Second doc:
+{custId:101,custName:"tara",address:{country:"malayasia"}}
+
+Collection:
+1. normal collection -- no restriction
+2. capped collecton -- restriction on size of collection or number of docs in the collection.
+
+performance -- query :
+select * from emp : return all the records
+normal collection -- 1 million rec
+capped collection(1000 rec )-- 1000 rec;
+
+capped collection -- restrict -- 1 million reords
+try to store beyond 1 million records -- throw me an error
+scalable write app: normal collection
+fixed in number of records -- capped collection
+
+creating the collection -- what type of collection
+
+
+CAP -- At a particular point of time, any of the dbs can adhere to only 2 of the 3 principles
+
+Consistency -- data should be consistent irrespective to where we read it from
+Availability -- data should be available 24/7; 365 daya
+Partition Tolerance -- data from different physical servers;  
+
+Mongodb : AP; eventual consistency
+master -slave architecture
+1 primary(master)
+multiple secondaries(slaves)
+
+writes -- can be handled only by primary
+secondaries -- async sync with the primary
+
+reads -- default -- handled by the primary
+configure -- secondaries can handle it
+1 primary server 
+4 secondary servers
+
+write operation --> primary --> complete the write operation --> acknowledgement to client--> secondaries will aynchronously sync with the primary --> 2 sec (n2,n3) have completed the sync and n4 and n5 are doing it --> read op for the same data
+
+Scenario 1: n2 handles the read --> updated data
+
+Scenario 1: n5 handles the read --> old data(stale data)
+
+Availability : yes
+Partition tolerance : yes
+consistency: no
+
+after n4,n5 finish syncing
+consistency -- yes
+
+secondaries will always sync with the primary
+but we can configure -- secondary can sync with another fully synced secondary
+with whom to sync -- YES;
+with which particular node to sync -- NO
+
+read preference: query/connection where to read from
+1. primary -- only from the primary server
+2. secondary -- only from the secondaries
+3. primaryPreferred -- first try from primary; if primary is unavailable try reading from secondaries
+4. secondaryPreferred -- first try from secondaries; if none of the secondaries are available, then read from primary
+5. nearest -- read from any server(primary or secondary) whichever is nearest (lowest latency)
+
+tune synchronisation:
+replication lag : default 30 seconds ; configurable
+
+secondary -- delayed secondary -- sync with the primary after a delay(configure/ setup)
+
+mongodb -- no rollback ; 
+human error -- delete a collection
+delayed secondary -- sync with primary after 24 hours
+
+replication lag -- 24 hours -- bad practice:
+
+delayed secondary -- not visible to the client
+
+Syncing process:
+write op --> 
+primary --> log of write op in a special capped collection called as oplog; perform the write op on the data it holds;
+secondaries --> asynchronoulsy sync with primary
+secondaries --> copy(using streams) of the primary oplog(w.r.t timestamp) and store in its own oplog; perform the op on its own respective data;
+
+delayed secondary --> copy from primary oplog (24 hours old)and perform the op on its own data
+
+Today is a beautiful day
+
+oplog --server level; special rolling capped collection -- on size of the collection
+
+delayed sec -- 24 hour delay
+oplog -- more than 25 hours of log
+
+secondary -- asynchronously sync 
+
+PSSSS (n1,n2,n3,n4,n5)
+
+n2 should sync before n3; NO 
+
+BK -- eventual consistency
+syncing time not more the replication lag
+
+Full consistency:
+1.all the writes and reads -- direct to primary only
+disadv: primary can go down -- not only writes will fail ; the read will fail; Availability may get compromised
+
+Strong consistency:
+ 
+Primary:{empId:101,empName:"sara"}
+Secondary:{empId:101,empName:"sara"}
+Delayed secondary:{empId:101,empName:"sara"}
+
+At 11: 00 am:
+
+update employee set empname="harry" where empId=101
+
+Primary:{empId:101,empName:"harry"}
+primary's oplog: {ns:dellDb.employee,time: 18-7-202211:00am; query:"update employee set empname="harry" where empId=101"}
+
+after some milliseconds
+Secondary:copy the data from the primary oplog to its own oplog
+Secondary oplog:....,{ns:dellDb.employee,time: 18-7-202211:00am; query:"update employee set empname="harry" where empId=101"};
+secondary -- will perform the write
+secondary data: {empId:101,empName:"harry"}
+
+after 24 hours:
+delayed Secondary:copy the data from the primary oplog to its own oplog before 24 hours
+delayedSecondary oplog:....,{ns:dellDb.employee,time: 18-7-202211:00am; query:"update employee set empname="harry" where empId=101"};
+delayed secondary -- will perform the write
+delayed secondary data: {empId:101,empName:"harry"}
+
+oplog --rotated
+delayed secondary -- sync after 24 hours
+write  op -- primary oplog has been rotated such that it has only 18 hours of info
+after 24 hours -- delayed sec tries to sync -- not possible -- delete all the data in its server; and perform a full initial sync with the primary; all the data; -- problems 
+
+sync -- initial sync -- clone of primary data
+other sync -- copy from the oplog based on timestamp
+
+
+oplog size: 5% of the free disk space
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

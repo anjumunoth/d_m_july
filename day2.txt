@@ -1,0 +1,315 @@
+Mongodb data structure
+
+
+BSON structure - Binary JSON 
+JS:
+number,string,boolean,array,object,date
+BSON : ObjectId, int32,int64,decimal,double,null
+
+ObjectId -- 12 byte hexadecimal number
+Generate -- mix of machineid,processId, timestamp,counter
+RDMBS -- mongodb
+db -- db
+table -- collection
+row/record -- document
+
+document: {"empId":101,empName:"sara",salary:145678}
+
+
+Create a database
+use dellDb;// create the db and switch over db
+
+Create a collection
+two ways
+1. No schema given
+Insert a document -- implicitly create the collection
+db.collectionName.insertOne({"empId":101,empName:"sara",salary:145678})
+db.employee.insertOne({"empId":101,empName:"sara",salary:145678})
+
+_id:
+-- present in all the documents
+-- Uniquely identify the documents
+-- whenever generated -- datatype -- ObjectId
+-- can be inserted as well
+-- can be of any data type like number or string or array or ObjectId
+-- can it have a null value -- yes -- but only one null allowed
+-- can it have duplicates -- no
+-- how does it maintain the uniqueness 
+	--whenever the collection is created, implicitly a unique index is created on _id. 
+-- drop the unique index on _id -- cannot be implicitly; will be dropped when the collection is dropped
+
+sudo chmod -R 777 /var/log/mongodb
+
+use dellDb
+
+Create a collection
+
+db.employee.insertOne({empId:101,empName:"Sara",salary:34567})
+db.employee.insertOne({empId:101,empName:"Sara",salary:34567})
+//sinlge line comment
+/*
+multi line comment
+*/
+
+select * from employee;
+db.employee.find()
+
+empId -- unique
+mongodb -- schemaless ; impose unique constraint 
+-- create a unique index on empId
+
+insertMany -- insert many documents
+db.employee.insertMany([
+{empId:105,empName:"tim",salary:14567},
+{empId:106,empName:"Piyush",salary:347},
+{empId:107,empName:"Priya",salary:3567}
+])
+
+db.employee.find()
+
+
+db.employee.insertMany([
+{empId:109,empName:"sam",salary:14567},
+{empId:110,empName:"saurav",salary:347,_id:104},
+{empId:111,empName:"danny",salary:3567}
+])
+
+109 will be inserted; throw an exception at 110;111 will not get executed
+
+find:
+-- 2 optional params
+-- first param -- filter condition
+-- second param -- projection
+1. where clause
+db.employee.find({empId:101})
+Relational operators
+<, > ,<=, >=,!= ,=
+$lt, $gt, $lte, $gte, $ne,$eq
+select * from employee where salary >5000
+db.employee.find({salary>5000});// Syntax Error
+db.employee.find({salary : {$gt: 5000}});// 
+
+
+
+Logical operators
+and, or not
+select * from employee where salary > 5000 or empId = 101
+
+db.employee.find({
+$or:[
+{salary : {$gt:5000}},
+{empId:101}
+]
+})
+
+select * from employee where salary > 5000 and empId = 101
+
+db.employee.find({
+$and:[
+{salary : {$gt:5000}},
+{empId:101}
+]
+})
+
+$not: inversion of output of the filter condition
+
+db.employee.find({
+salary : {$not :{$gt:5000}}
+})
+
+collection has 12 docs
+$not: process
+1. get all the docs which have a salary > 5000 ; lets say the result set of greater than -- 5 docs
+2. remaining 7 docs will become the result set
+
+// all the docs except salary > 5000
+
+db.employee.find({
+empId: {$not :{$gt:105}}
+})
+// all the docs except the docs where empId > 105
+// all the docs where empId <=105, empId is null or empId is not present
+
+
+in : $in, $nin
+select * from employee where empId in (101,103,105,107)
+db.employee.find({
+empId : {$in : [101,103,105,107]}
+})
+db.employee.find({
+empId : {$nin : [101,103,105,107]}
+})
+
+
+between
+select * from employee where salary between 3000 and 7000
+db.employee.find({
+salary : {$gt:3000,$lt:7000}
+})
+
+like: javascript pattern matching
+i - modifier ignore the case
+pattern matching , wildcard characters * , %
+select * from employee where name like "l%"
+db.employee.find({
+empName:/^l/i
+})
+
+select * from employee where name like "%v"
+db.employee.find({
+empName:/v$/i
+})
+
+select * from employee where name like "%a%"
+db.employee.find({
+empName:/a/i
+})
+
+db.employee.find({
+empName:/e+/i
+})
+
+o?d
+gd , god
+
+o*d 
+gd, god,good, goooood
+
+o+d
+god, good, goooood
+
+
+$exists
+db.employee.find({salary : {$exists:false}});;// all the docs where salary does not exists
+db.employee.find({salary : {$exists:true}});;// all the docs where salary does  exists
+
+$type -- check the datatype of values:
+db.employee.find({salary: {$type: 10} });;// docs where salary is null
+
+get all the docs where _id is a number
+
+db.employee.find({_id: {$type: 1} });
+
+insert -- deprecated in many drivers
+insert -- insert one or multiple docs
+db.collName.insert({})-- work like insertOne
+db.collName.insert([])-- work like insertMany
+insertOne
+
+findOne({filterCondition}) -- find a single doc which matched the filter condition
+db.employee.findOne() -- first doc which was inserted
+
+Projection: -- second param
+
+db.employee.find({salary :{$gt:5000}});// all the fields in the docs which match the filter condition
+db.employee.find(
+	{salary :{$gt:5000}},
+  {empId:1,salary:1}
+  );// empId, salary, _id will be the projected fields
+  
+db.employee.find(
+	{salary :{$gt:5000}},
+  {empId:1,salary:1,_id:0}
+  );// empId, salary will be the projected fields
+  
+db.employee.find(
+	{salary :{$gt:5000}},
+  {empId:1,salary:0}
+  );
+    // illogical; error()
+  
+//Arrays:
+db.employee.insertOne({empId:201,empName:"sweta",hobbies:["cooking","trekking"]})
+
+//Object:
+db.employee.insertOne({empId:202,empName:"shalini",address:{state:"Karnataka",country:"India"}})
+
+//Array of Objects:
+db.employee.insertOne({empId:203,empName:"sheela",
+projects:[
+{
+	projectId:"p101",
+  location:"India"
+},
+{
+	projectId:"p104",
+  location:"Malaysia"
+}
+]})
+
+https://github.com/anjumunoth/dell_mongodb_july
+
+docs which belong to state MA and have a pop > 5000
+
+
+
+db.zipcode.find({$and : [{state:"MA"},{pop:{$gt:5000}}]})
+
+Array and find
+1. docs which have a value 42.070206;// irrespective of pos
+db.zipcode.find({
+loc:42.070206
+})
+
+2. Exact array search and exact position
+db.zipcode.find({
+loc:[-72.622739,42.070206]
+}) ;// some docs
+
+db.zipcode.find({
+loc:[42.070206,-72.622739]
+}) ;// 0 docs
+
+3. search for a subarray
+db.zipcode.find({
+loc:{$all:[42.070206,-72.622739]}
+}) ;// some docs
+
+4. search for all the docs which has an element in the loc array which is greater than 42
+db.zipcode.find({
+loc:{$gt:42}
+})
+
+4. search for all the docs which has an element in the loc array which is greater than 42
+db.zipcode.find({
+loc:{$gt:42}
+})
+
+5. search for all the docs which has an element in the loc array in the 0th position which is greater than 42
+db.zipcode.find({
+"loc.0":{$gt:42}
+})
+
+6. Project only the first element of the loc ; latitude
+db.zipcode.find({},{loc:1});// entire loc will be projected
+
+db.zipcode.find({},{"loc.0":1});// loc will be empty will be projected
+
+.position -- only in the filter condition
+
+db.zipcode.find({},{"loc":{$slice:1}});// 
+
+$slice -- count of elements
+ positive number: n -- project n elements from beginning of array
+ negative number: -n -- project n elements from end of array
+ 
+ 2 elements 
+ $slice : -1 ; // last element alone
+ 
+ $slice : -3 ; // last 3 elements
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
