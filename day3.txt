@@ -1,0 +1,258 @@
+db.zipcode.find({},{"loc.0":1});// loc will be empty will be projected
+
+"loc.position" --position is a number -- can be used as part of filter position
+
+$slice
+$ operator
+$elemMatch
+https://github.com/anjumunoth/dell_mongodb_july
+
+$slice : count of elements to be projected
+Can be used only in projection
+-- number 
+-- positive number -- from the beginning of the array
+-- negative number -- from the end of the array
+
+$ operator
+--Can be used only in projection
+-- Can be used to display only the first element which satisfies the filter condition
+-- filter condition should be used on the same array
+db.zipcode.find({loc :{$gt:42}},{"loc.$":1});
+Project only the first element which satisfies the filter condition
+
+db.students.insertMany([
+{studId:101,marks:[10,20,30]},
+{studId:102,marks:[20,30,10]},
+{studId:103,marks:[10,20,30]},
+{studId:104,marks:[10,55,90]},
+{studId:105,marks:[70,80,90]},
+])
+
+db.students.find({marks:{$gt:50}},{"marks.$":1,studId:1});
+{studId:104,marks:[55]}
+{studId:105,marks:[70]}
+db.students.find({"marks.1":{$gt:50}});//104,105
+db.students.find({marks:{$gt:40,$lt:70}});//104
+db.students.find({marks:[10,20,30]});//101,103
+db.students.find({marks:{$all:[10,20,30]}});//101,103,102
+
+db.students.find({},{marks:{$slice:2},studId:1,_id:0});//
+{studId:101,marks:[10,20]},
+{studId:102,marks:[20,30]},
+{studId:103,marks:[10,20]},
+{studId:104,marks:[10,55]},
+{studId:105,marks:[70,80]},
+
+db.students.find({},{"marks.$":1,studId:1,_id:0});//error
+
+
+Objects:
+Get the docs which have a building number greater than 1000
+db.restaurant.find({"address.zipcode":"10462"})
+db.restaurant.find({"address.building":{$gt:1000}});//0 docs
+db.restaurant.find({"address.building":"1007"}});//3 docs
+
+db.restaurant.find({"grades.score":{$gt:15}}});// 1608 doc
+//any of the elements in the grades array should have a value > 15 to come in the result set
+
+db.restaurant.find({"grades.0.score":{$gt:15}});// 400
+// the element at 0th position should have a score > 15
+
+docs which have a grade A;// 3759
+db.restaurant.find({"grades.grade":"A"});// 
+
+docs which have a grade A and score greater than 15;// 1596
+db.restaurant.find({
+$and:[
+{"grades.grade":"A"},
+{"grades.score":{$gt:15}}
+]
+});
+// docs for which there is atleast one element which satisfies grade> 15 and if there is atleat one element which satisfies grade is A
+
+$elemMatch:
+--same element to satisfy multiple conditions:
+
+db.restaurant.find({
+grades: {
+	$elemMatch:{grade:"A",score:{$gt:15}}
+}
+})
+
+In the projection: elemMatch:
+-- project the first element which satisfies the condition given in the projection itself
+db.restaurant.find({},
+{
+	grades:{$elemMatch:{grade:"A",score:{$gt:5}}},
+	name:1
+  })
+  
+  db.restaurant.find(
+{"grades.grade":"A"},
+{
+	grades:{$elemMatch:{score:{$gt:10}}},
+	name:1
+  })
+
+  
+db.restaurant.find(
+{grades:{$elemMatch:{grade:"A"}}},
+{
+	grades:{$elemMatch:{score:{$gt:10}}},
+	name:1
+  })
+  
+1. first find all the docs which a grade which is A(atleast one element with a grade A)  
+2. on the above result set, project the array with either 1 or 0 elements
+project 1 element -- first element which has a score greater than 10 (grade which is A or B or C)
+not necessary that the same element which satisfies filter condition 1 should satisty the projection as well
+
+
+same element which satisfies condition should satisty the project as well
+db.restaurant.find(
+{grades:{$elemMatch:{grade:"A",score :{$gt:15}}}},
+{
+	"grades.$":1,
+	name:1
+  })
+  
+elemMatch: 
+-- can be used both in filter condition and project condition
+  
+db.restaurant.find({
+$and:[{"grades.score":{$gt:10}},{"grades.grade":"A"}]
+});// Morris park bake shop
+ 
+ // same element should match both the criteria
+db.restaurant.find({
+grades:{$elemMatch:{score:{$gt:10},grade:"A"}}
+});// Morris park bake shop will not be there
+
+$size:
+-- filter condition:
+db.restaurant.find({grades:{$size:3}});// docs which have grades as an array of size 3
+
+RDBMS:
+MSSQL
+-- where clause mandatory -- no
+-- select clause -- * or column names
+select projected fields from emp where clause
+db.emp.find(where clause,projected fields)
+
+select * from emp
+db.emp.find();//no where clause, all fields
+
+select * from emp where salary> 5000
+db.emp.find(where clause)
+
+select empId,salary from emp 
+db.emp.find({},{empId:1,salary:1})
+
+
+
+{grades:{$elemMatch:{"score":{$gt:80,$lt:100}}}}
+
+db.restaurants.find({
+$and: [
+ {"cuisine" : {$ne :"American "}},
+  {"grades.score" : {$gt : 70}},
+   {"address.coord.0" : 
+{$lt : -65.754168}} ]  });
+
+-- multiple conditions to be joined by and 
+-- conditions are based on different fields
+db.restaurant.find(
+{
+	cuisine:{$ne: "American "},
+	"grades.score" : {$gt : 70},
+  "address.coord.0" : {$lt : -65.754168}
+}
+)
+  
+db.restaurant.find(
+{
+	cuisine:{$ne: "American "},
+	"grades.grade" :"A",
+  borough:{$ne:"Brooklyn"}
+}
+).sort({cuisine: -1})
+
+
+Sort the documents :
+chain the sort method to find
+desc : -1
+asc: 1
+
+select * from emp order by empName,salary
+select * from emp order by salary,empName
+
+db.employee.find().sort({salary:1,empName:-1})
+db.employee.find().sort({empName:-1,salary:1})
+
+limit method
+db.employee.find().count();// number of docs which has satisfied the find filter condition
+db.employee.find().count();// 15 docs
+
+db.employee.find().limit(5);// first 5 doc which satisfies the filter condition
+
+db.employee.find().skip(5);// skip 5 doc which satisfies the filter condition and return the remaining result set
+
+6th highest salary onwards
+db.employee.find().sort({salary:-1}).skip(5)
+
+
+lets say 101 to 115 empId
+db.employee.find().limit(5).skip(5);//106 to 110; 
+db.employee.find().skip(5).limit(5);// 106 to 110;
+
+db.employee.find().skip(5).skip(5);// multiples, last one will be taken
+
+db.employee.find();//  docs in result set
+db.employee.find().limit(-1);//error
+db.employee.find().limit(2);//2 docs
+db.employee.find().limit(0);//all docs in result set from find ; what is use of query
+
+always skip will be executed before limit
+
+
+Update
+update emp set salary = 1000 where empId=101
+
+updateOne() -- 
+updateMany()
+update() -- deprecated -- update a single/multiple
+
+updateOne(filtercondition, how to update)
+-- can update either 0 or 1 document
+db.employee.updateOne({empId:101},{$set:{salary:1000}})
+nMatched: 1; nModified:1
+
+db.employee.updateOne({empId:999},{$set:{salary:1000}})
+nMatched: 0; nModified:0
+
+db.employee.updateOne({empId:101},{$set:{salary:1000}})
+nMatched: 1; nModified:0
+
+db.employee.updateOne({empId:{$gt:101},{$set:{salary:1000}})
+nMatched: 1; nModified:1
+
+updateMany -- update all the docs which match the filter condition
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
