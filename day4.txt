@@ -1,0 +1,308 @@
+Java
+
+import java.util.Arrays;
+import org.bson.Document;
+import com.mongodb.MongoClient;
+import com.mongodb.MongoClientURI;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import org.bson.conversions.Bson;
+import java.util.concurrent.TimeUnit;
+import org.bson.Document;
+
+/*
+ * Requires the MongoDB Java Driver.
+ * https://mongodb.github.io/mongo-java-driver
+ */
+
+MongoClient mongoClient = new MongoClient(
+    new MongoClientURI(
+        "mongodb://localhost:27017/"
+    )
+);
+MongoDatabase database = mongoClient.getDatabase("dellDb");
+MongoCollection<Document> collection = database.getCollection("employee");
+
+FindIterable<Document> result = collection.find((new Document("empId", 101L)));
+
+Aggregation pipeline:
+best practice -- modification on the collection
+multiple stages
+o/p of the first stage becomes the input of the second stage
+
+Update
+
+updateOne(filtercondition,how to update)
+nMatched; nModified
+
+updateMany(filtercondition,how to update)
+-- can modify the multiple docs
+nMatched -- 0 to n
+nModified -- o to n
+$set: update a field; add a new field
+
+db.employee.updateOne({salary:{$gt:2000}},{$set:{salary:20000}})
+//1 doc
+
+db.employee.updateOne({empId:101},{$set:{location:"India"}})
+// add a new field called as location
+
+db.employee.updateOne({empId:101},{$set:{location:"India"}})
+
+rename a field
+db.employee.updateOne({empId:101},{$rename:{"location":"countryName"}})
+
+remove a field
+db.employee.updateOne({empId:101},{$unset:{empName:0}}})
+
+
+1. authentication and authorisation
+BK -- permission to update
+2. restrict the user from adding a new field
+db.employee.updateOne({empId:101},{$set:{loaction:"India"}});
+// add a new field loaction -- restrict --no way
+
+-- drawback ;; advantage
+India -- pincode
+US -- zipcode
+Malaysia -- postcode
+
+insertion order:
+as when i insert -- stored in the disk -- file system -- order it would be retrieved
+db.employee.updateOne({},{$set:{salary:0}});//first inserted doc
+
+_id -- idempotent
+-- Can i rename _id field -- NO
+-- Can i update _id field -- NO
+-- Can i remove _id field -- NO
+
+update emp set salary = salary + 1000 where empId=102
+db.employee.updateOne({empId:102},{$inc:{salary:1000}});//
+
+update emp set salary = salary - 1000 where empId=102
+db.employee.updateOne({empId:102},{$inc:{salary:-1000}});//
+
+db.employee.updateOne({empId:102},{$inc:{empName:"Fred"}});// resulted in error
+
+concatenation on a string
+update with arrays:
+db.employee.updateOne({empId:102},{$push:{hobbies:"singing"}});
+
+$push:
+-- always only work with arrays
+-- check if an array called as hobbies exists
+-- if yes, then append the value
+-- if no, create an array called as hobbies and append the value to the array
+
+
+// will get added as a single element as a sub array
+db.employee.updateOne({empId:102},{$push:{hobbies:["watching tv","playing games"]}});
+
+add multiple elements
+db.employee.updateOne({empId:102},{$push:{hobbies:{$each:["watching tv","playing games"]}}});
+
+$each 
+-- can be used only with $push
+-- add the various elements in the array as individual elements
+-- for $each operator, the value is an array
+
+add element(s) at a particular position: $position
+-- should be used only with $each
+-- adds the various element(s) at the given position
+-- performance intensive operation(memory,time)
+-- 
+db.employee.updateOne({empId:102},{$push:{hobbies:
+{$each:["travelling"],$position:0}
+}})
+
+For empId: 105, add the projects he is working in as array:p101,p107
+db.employee.updateOne({empId:105},{$push:{projects:["p101","p107"]}});
+
+db.employee.updateOne({empId:105},{$push:{projects: {$each:["p101","p107"]} }})
+db.employee.updateOne({empId:105},{$push:{projects:{$each:["p101","p107"]}}});
+
+//Add p102 at 1st position:
+db.employee.updateOne({empId:103},{$push:{projects:{$each: ["P102"],$position:1}}});
+
+//Add p103,p104 at 2nd position
+db.employee.updateOne({empId:105},{$push:{projects:
+[{$each:["p103","p104"],$position:2]}});
+db.employee.updateOne({empId:105},{$push:{projects:{$each:["P103","P104"],$position:2}}});
+
+$sort 
+-- should be used only with $each
+-- sort the elements within the array 
+-- 1 ; sort in asc
+-- -1; sort in desc order
+-- will sort the elements in the db itself; permanent reordering of elements 
+-- performance intensive task
+
+db.employee.updateOne({empId:102},{$push:{hobbies:
+{$each:["reading books"],$sort: 1}
+}});
+//
+
+db.employee.updateOne({empId:102},{$push:{hobbies:
+{$each:[],$sort:-1}
+}})
+
+db.restaurant.updateOne({restaurant_id:"101"},
+{
+	$push:
+  {
+  	grades:
+    	{
+      	$each:[],$sort:{score:1}
+      }
+  }
+})
+
+db.restaurant.find({restaurant_id:"101"})
+db.restaurant.find({restaurant_id:"101"}).pretty()
+
+$slice:
+-- should be used only with $each
+-- slice the array to the given length
+-- positive number -- remove the elements from the end
+-- negative number
+db.restaurant.updateOne({restaurant_id:"101"},
+{
+	$push:
+  {
+  	grades:
+    	{
+      	$each:[],$slice:5}
+      }
+  }
+})
+
+db.restaurant.updateOne({restaurant_id:"101"},
+{
+	$push:
+  {
+  	grades:
+    	{
+      	$each:[],$slice:-4}
+      }
+  }
+})
+
+Combination of $slice,$position, $each,$sort
+db.employee.updateOne({empId:106},{$set:{hobbies:["h1","h6","h2","h4"]}});
+
+db.employee.updateOne({empId:106},{$push:{hobbies:
+{
+	$each:["h7"],$slice:4,$sort:1,$position:1
+}
+}
+})
+
+$position
+hobbies:["h1","h7",h6","h2","h4"]
+$sort:
+hobbies:["h1","h2",h4","h6","h7"]
+$slice: 4
+hobbies:["h1","h2","h4","h6"]
+
+
+// hobbies: ["h1","h2","h4","h6"] -- majority
+// add to the subarray at position 0 -- not possible
+
+
+// delete an element in the array
+$pop:
+-- remove only a single element from an array
+-- 1 -- end of the array
+-- -1 -- beginning of the array
+-- remove(pop) an element either from the beginning or end of end
+db.employee.updateOne({empId:106},{$pop:{hobbies:1}})
+
+$pull
+-- remove element(s) based on a condition
+db.employee.updateOne({empId:102},{$pull:{hobbies:/^t/i})
+
+db.employee.updateOne({empId:102},{$pull:{hobbies:/s$/i});
+// remove element(s) which satisfy the condition that it ends with s
+
+// remove h2 from the subarray -- no modifications to an existing subarray
+
+remove the 3rd element in the array-- no
+-- roundabout process
+
+$ operator: positional operator
+-- matches the first and only element which satisfies the filter condition
+-- filter condition should be based on array
+
+db.employee.updateOne({hobbies:"watvhing tv"},{$set:{"hobbies.$":"trekking"}})
+
+db.employee.updateOne({hobbies:"watvhing tv"},{$set:{"hobbies.$":"trekking"}})
+
+
+pop example:
+
+user time logging in the website
+log in:
+db.sessions.updateOne({custId:101},{$push:{logInTime:new Date()}})
+
+log out:
+db.sessions.updateOne({custId:101},{$pop:{logInTime:1}})
+
+logInTime is an empty array
+db.sessions.updateOne({custId:101},{$pop:{logInTime:1}})
+
+$[] -- replace all the elements with the given value:
+db.employee.updateOne({hobbies:"watching tv"},{$set:{"hobbies.$[]":"trekking"}})
+
+updateMany -- 
+-- 2 mandatory parameters
+-- 3rd optional parameter
+
+db.employee.updateMany(filtercondition,how to update, array options)
+
+db.emp.updateMany({empId:999},{$set:{empName:"kishan"}},{upsert:true})
+// upsert - true ; check if any doc satisfies the filter condition
+if found -- update; else insert
+
+db.emp.updateMany({empId:999},{$set:{empName:"keshav"}},{upsert:true})
+
+3rd param -- upsert
+3rd param -- arrayFilters:
+
+db.emp.updateOne({},{$set:{"hobbies.$[element]":99}},{arrayFilters:[{element: 30}]})
+
+Delete a document
+-- mandatory param
+db.emp.deleteOne({});// delete the first doc which matched the filter condition
+db.emp.deleteMany({});//delete all the docs which matches the filter condition
+
+db.emp.deleteMany({});// truncate the collection
+
+db.emp.deleteOne({empId:101});//first doc which satisfies the condition will get deleted
+
+
+hobbies: [10,20,30,40,30]
+db.emp.updateOne({hobbies:30},{$set:{"hobbies.$":99}})
+// hobbies: [10,20,99,40,30]
+
+hobbies: [10,20,30,40,30]
+db.emp.updateOne({},{$set:{"hobbies.$[element]":99}},{arrayFilters:[{element: 30}]})
+//hobbies:[10,20,99,40,99]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

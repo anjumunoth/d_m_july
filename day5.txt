@@ -1,0 +1,275 @@
+Indexes
+Tasks of DBA
+1. support production -- health check of databses
+2. server -- status
+3. logs of server
+4. performance monitoring:
+		-- CPU usage
+		-- memory usage
+		-- slow running queries
+		-- network 
+		-- locks; deadlocks
+		-- storage capacity issues
+		-- I/O usage
+		-- waits
+		-- lag between replicas
+
+Slow running query:
+	-- Identification
+	-- Reason for the slowness
+	-- Speeden this query
+
+queries -- executed -- who; when; how much time; how is it executed
+
+explain --
+	-- queryPlanner
+	--executionStatsMode
+	--allPlansExecutionMode
+
+India -- NewYork
+India - Dubai - NewYork
+India - London - NewYork
+India-malaysia-newyork
+india- japan-newyork
+india-australia-newyork
+
+number of paramters -- select ur best way
+-- time of travel
+-- cost of travel
+-- availability of tickets
+
+india-dubai-newyork
+
+india -- london -- newyork ; better plan;hinted
+
+reached NY -- winning plan ; exactly travelled to NY
+rejected plans:
+India - London - NewYork
+India-malaysia-newyork
+india- japan-newyork
+india-australia-newyork
+
+DBA -- how was the query executed 
+{cuisine:"Bakery",borough:"Bronx"}
+index -- cuisine
+index -- borough
+3 possible plans:
+1. coll scan
+2. index on cuisine
+3. index on borough
+
+winning plan: index on cuisine
+rejected plans:[collscan,index on borough]
+compare on which params 
+
+google maps:
+Bangalore -- rajaji nagar -- shanti nagar
+
+way; alternate ways(distance,time extra)
+
+Ops manager -- tool --
+-- build deployments
+-- monitor deployment
+-- alerts
+-- slow running queries
+-- point in time backup/recovery
+
+Indexes:
+what is an index -- 
+
+b- tree index
+binary tree 
+-- one root node
+-- parent child relationship
+-- parent -- 2 children
+-- left child -- less than parent
+-- right child -- greater than parent
+
+Indexes
+-- may fasten up the read queries
+-- slow down the writes
+	-- write operation on data
+	-- make appropriate changes tothe binary tree index
+-- increase the cost
+	-- memory to store index
+	-- maintain the index -- cost
+-- create the index 
+	-- process involving locks -- db, collection
+-- non beneficial
+	-- very few queries on indexed field
+
+Different types of Indexes
+-- single/simple index
+	-- primitive field
+	-- array
+	-- object
+	-- embedded field
+
+-- compound index/composite index
+-- hashed index 
+-- text index -- speeding query
+-- ttl index
+-- geospatial index
+apple
+mobiles
+laptops
+fruit apple
+chargers
+
+-- ttl index
+total time to live
+maintain the logs -- rotate in one week
+remove it after 3 months -- manual process/scripts
+
+ttl index -- create it on a date field
+-- delete the documents in the collection after the expiry period
+-- field name, expireAfterSeconds
+session logs -- user sessions log-- current users
+create a collection called as session logs; create the index; deletion will happen on this collection
+
+Ameerpet --> SR nagar
+2 kms radius near the pickup point
+
+cab --> distance --> pick up point
+latitude,longitude
+
+cabs -- live position --> collection
+user pick up point -- find query
+distance -- indexes -- 
+
+Properties:
+1. Unique index -- maintain the uniqueness of documents
+_id index
+2. Sparse index -- docs which have the indexed field -- creating the index
+Normal index -- 15 docs will be taken for creating index on deptId
+Sparse index on deptId -- 13 docs(which have the indexed field) will be taken for creating index on deptId
+
+
+
+3. Partial index -- docs which satisfy a particular condition(s) -- creating the index
+partial index on deptId; filterExpression : deptId: "D1"
+
+4. Wild card index -- text index built on all the fields which have a string value 
+
+5. name of the index
+6. background/foreground index
+
+
+create an index
+db.collection.createIndex(index field,properties)
+
+db.zipcode.createIndex({state:1});// asc order
+db.zipcode.createIndex({state:-1});// desc order
+
+single index -- order is not important -- traverse the index entries in both the direction
+
+parameters for winning plan
+-- keysExamined at each stage
+-- number of docs returned at each stage
+-- works at each stage
+-- execution time for each stage
+
+db.zipcode.find({pop:{$gt:5000}});
+// plan 1 execution time - 5 ms; keysExamined - 100
+// plan 2 execution time - 15 ms; keysExamined - 1000
+// plan 3 execution time - 2 ms; keysExamined - 2000
+
+when all is the index going to be used
+-- find on the indexed field
+-- sort on the indexed field
+
+state_1; city_-1
+db.zipcode.find({state:"Ak"});//state index
+db.zipcode.find({city:"AGAWAM"});//city index
+db.zipcode.find({state:"AK",city:"AGAWAM"});
+// whichever performance wise better
+// use state index -- plan1
+// use city index -- plan2
+// use state index, use city index, and on the 2 results set -- plan3
+
+Indexes
+-- number of docs examined -- lesser
+-- execution time -- optimised
+
+replica set --
+index create
+
+read operations --
+data changes -- write operation -- high
+
+write intensive app;
+write op -- multiple steps:
+-- first written into journal
+-- perform the write op
+-- if sharding is enabled; mongos--> config server--> mongos --> respy shard--> write op
+-- write into oplog of primary and based on write concern(so many secondaries syncing)
+-- maintain the various indexes
+-- acknowledgement to the client
+reads -- best secondaryPreferred
+
+-- no stored proc in mongodb
+-- no transactions in mongodb -- not ACID compliant
+-- functions -- calculations on data
+
+data
+-- stored in primary
+-- same data in primary is synched by the secondaries
+
+queries 
+writes/ reads -- primary default
+configure -- secondaries can handle reads
+
+composite index
+-- order is important
+-- order of fields is also important
+-- order of sorting is also important
+
+db.zipcode.createIndex({state:1,city:-1})
+
+db.zipcode.createIndex({state:1},{name:"state_1"})
+
+db.zipcode.createIndex({city:-1},{name:"city_-1"})
+db.zipcode.createIndex({state:1,city:-1})
+
+take the entries of (state,city) 
+
+index entry : state,city
+
+db.zipcode.createIndex({state:1,city:-1})
+
+db.zipcode.find({state:"AK"});//use the compound index
+db.zipcode.find({city:"AGAWAM"});//not use the compound index
+db.zipcode.find({city:"AGAWAM",state:"AK"});//use the compound index
+db.zipcode.find({state:"AK",city:"AGAWAM"});//use the compound index
+
+db.zipcode.find().sort({state:1});//use the compound index
+db.zipcode.find().sort({state:-1});//use the compound index
+db.zipcode.find().sort({city:1});//not use the compound index
+db.zipcode.find().sort({city:-1});//not use the compound index
+
+db.zipcode.find().sort({state:1,city:-1});//use the compound index
+db.zipcode.find().sort({state:-1,city:1});//use the compound index; exact reverse
+db.zipcode.find().sort({state:-1,city:-1});//not use the compound index
+db.zipcode.find().sort({state:1,city:1});//not use the compound index
+
+
+state,city -- b tree
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+	
+
+
+
+
