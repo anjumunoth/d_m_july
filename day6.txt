@@ -1,0 +1,233 @@
+https://www.mongodb.com/docs/v5.0/reference/operator/query/text/#mongodb-query-op.-text
+
+Indexes
+
+1. Simple index 
+ -- primitive value 
+ -- object
+ -- embedded field
+ -- array (multi key index) db.zipcode.createIndex({loc:1})
+ -- date
+2. Compound index (index on multiple fields)
+3. Hashed index 
+-- used ideally for even distribution of data
+-- used for timestamp, ObjectId values
+
+3. ttl index
+-- built on date field, array of date values
+-- delete the doc on expiration
+-- can modify the expireAfterSeconds in a ttl index
+
+db.session.insertMany([
+{empId:101,doj:new Date()},
+{empId:102,doj:new Date(2022,06,01)},
+{empId:103,doj:new Date(2023,01,01)},
+{empId:104,doj:new Date(2022,08,01)}
+])
+
+
+categories -- 4 
+buckets - 4
+
+emp collection
+simple index on deptId
+deptId -- finite number of values, number of distinct value -- very low
+
+deptId -- d1 -- d10;
+index entries -- 10;
+
+writes -- d1 -- 1000 docs
+index d1 -- skewed
+
+hashed index on _id
+for consecutive values of _id -- they will be different index entries
+reads/ writes -- spread out
+
+documentsExamined
+keysExamined
+execution Time
+number of works
+
+create the index -- paralelly writes can also happen
+index -- background process
+
+text index -- text search
+-- very large index 
+-- for a collection only one text index is possible
+weights: 
+field(s) -- text index
+
+db.restaurant.createIndex({cuisine:"text",name:"text"})
+// equal weigtage for both the fields; default weights:1
+
+db.restaurant.createIndex({cuisine:"text",name:"text"},{weights:{name:10,cuisine:5}})
+// score of a particular document: (weights for name * number of occurences of search filed in name)+
+(weights for cuisine * number of occurences of search filed in cuisine)
+
+
+Building of text index
+
+Every word(non stemmed words) in name and cuisine is going to be taken for creating the index
+
+queries use the index
+db.restaurant.find({cuisine:"Bakery"});// not going to use the text index
+db.restaurant.find({$text:{$search: /Bake/i}});// will use the index
+
+
+more the fields -- more the number of index entries
+bigger the data in each field -- more the number of index entries
+weights -- no correlation with the index size
+
+drop the index and recreate it
+indexes cannot be modified
+
+Wild card indexes:
+-- large index
+-- text index on all the fields which have a string value
+-- borough,cuisine,name,restaurant_id, address.building,address.street,address.zipcode
+-- one wild card index in a particular collection
+db.restaurant.createIndex({"$**":"text"})
+db.restaurant.find({$text:{$search: /Bake/i}});//
+
+wild card index vs text index
+-- text index -- build on certain set of field; wildcard -- all string fields
+-- search on certain fields or all the string fields
+-- usually wild card index  will be bigger in size than text index
+
+simple index vs text index
+-- simple index much smaller than text index; maintanence is easier
+-- multiple simple indexes ; only one text index
+-- compound index -- weightage for each field is same; text index -- different weigtage
+-- simple index -- b tree index ; traverse in both the directions -- path is very predictable
+-- text index -- path is not predictable
+Morris park bake shop -- 4 index entries; 
+search for "morris park" -- no way to find out the proximity between morris and park
+
+
+
+sparse index:
+db.restaurant.createIndex({restaurant_id:1},{sparse:true})
+//only those docs which have the restaurant_id field will be taken up for indexing
+
+partial index:
+db.zipcode.createIndex({pop:1},{partialFilterExpression:{pop:{"$gt":1000}}})
+//only those docs which have the pop>1000 will be taken up for indexing
+
+db.zipcode.find({pop:{$gt:2000}});// use
+db.zipcode.find({pop:{$lt:2000}});// not use;<1000; 1000 to 2000
+db.zipcode.find({pop:{$gt:500,$lt:6000}});//not use; 500 to 1000; 1000 to 6000
+use cases:
+-- smaller indexes
+-- performance cost --lower
+-- age ; simpleindex; age >18partial index
+
+gender : m,f,others
+index on gender : 3 index entries
+company 70% male; 20% female; 10% others
+
+-- low cardinality
+partial index: gender:m; uneven distribution of data
+text index on gender: 1. gender:cardinality:3 ; skewed index -- not suitable
+
+no index; partial index on gender:male
+db.coll.find({gender:"male"});//collscan(10000);partial index: index entries:1; docs examined : 7000
+
+1. Unique
+db.coll.createIndex({restaurant_id:1},{unique:true});
+
+-- Can another index on _id be created -- yes (hashed,compound)
+-- Can an index be both sparse and unique -- yes
+db.restaurant.createIndex({restaurant_id:1},{unique:true,sparse:true});-- yes
+-- Can an index in the following manner be created -- yes
+db.zipcode.createIndex({pop:1},{partialFilterExpression:{"state":"AK"}});-- yes
+-- Are 3 following statements possible together
+db.zipcode.createIndex({state:1});-- yes
+db.zipcode.createIndex({state:-1});-- yes(logically not needed)
+db.zipcode.createIndex({state:"hashed"});-- yes
+
+-- Is it logically correct/needed to have a sparse partial index
+db.zipcode.createIndex({pop:1},{sparse:true,partialFilterExpression:{"state":"AK"}});-- yes
+-- partial index is already sparse 
+-- sparse index may not be partial
+
+db.collname.rebuild()
+// drop all the indexes and recreate them
+-- performance intensive task
+-- block all the write operation on the collection; exclusive(W) lock 
+-- deprecated in mongodb 6.0
+-- can be given on a standalone server
+
+-- when should i do a recreate
+usecases
+-- hashed index on empId ; 10 million docs with consecutive empId's
+-- rebuild -- evenly distribute the data(newly inserted, old existing values)
+-- performance issues: page faults; deadlocks; memory optimisation; free up unused memory
+
+hashed index 
+indexed filed's value --> hashing algorithm --> on basis of the hashed values, the indexes are create
+
+db.zipcode.createIndex({pop:1},{partialFilterExpression:{"state":"AK"}});-- yes
+
+update - 10 million docs;
+update 10 million docs and update the corresponding index entries
+db.restaurant.updateMany({},{$set:{reviews:"Good"}});//
+nMatched:3772;nModified:3772
+2 indexes
+1. restaurant_id ;// not modify the index
+2. reviews: // modify the index
+
+db.restaurant.insertOne({reviews:"Good",restaurant_id:"678"});//
+insert the doc; modify the restaurant_id index; modify the reviews op
+
+indexes: 
+-- fasten read queries; slowen the write queries
+
+rename a collection -- yes
+existing collection names swapping with another collection name in same database -- no
+
+Get all the indexes in all the collections in a particular db;
+
+var cursor = db.getCollectionNames();  
+cursor.forEach(function(y){
+ 	var c1=db.getCollection(y).getIndexes();
+ 	c1.forEach(function(x) {
+		print(x);
+ 	});
+  });
+}
+
+var cursor = db.getCollectionNames();  
+cursor.forEach(function(y){print("Collection Name: "+y);var c2=db.getCollection(y).getIndexes();print("Index name: ");c2.forEach(function (ind){print(ind["name"]);});})
+script:
+
+text index : score
+sort the doc on basis of score
+
+
+db.restaurant.aggregate([{
+ $match: {
+  $text: {
+   $search: 'Bake'
+  }
+ }
+}, {
+ $project: {
+  restaurant_id: 1,
+  score: {
+   $meta: 'textScore'
+  },
+  name: 1
+ }
+}, {
+ $sort: {
+  score: -1
+ }
+}])
+
+
+current Operations:
+killing some currently running operations
+
+
+
+profiler:
