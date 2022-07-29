@@ -1,0 +1,277 @@
+Replication:
+-- duplication of the data in different servers
+-- asynchronous replication
+-- incremental synchronisation
+--high availability
+-- servers can be in different geographical locations
+
+PSSSSSS -- replica set
+-- deployment ; 3 data centres: India, Malyasia, Japan;
+Primary is in India
+n1 -- n7
+n1(P10, Chennai),n2(P7,Bangalore),n3(P9,Pune) - India
+n4(P5),n5(p3) -- malaysia
+n6(P4),n7(P0) -- japan
+Initiate the replica set : n1 -- primary
+if n1 goes down, pune server-- primary
+
+
+Problems:
+1. write intensive app; huge volumes of data;
+app -- faster;
+data spread into multiple servers -- multiple I/O possible; data will be written faster
+data is written on a single node -- slower the write op
+if data can be written on multiple servers -- faster
+
+server memory -- 1 tb
+data -- 5tb
+a. data spread into multiple servers -- better solution
+b. increase the memory of a single server
+
+Sharding: Partitioning of data
+-- break up data and store it in different physical servers
+why sharding
+-- data doesnt fit in a single server
+-- increased memory -- huge volumes of data
+three servers ; each server (2tb); 6tb of data
+-- focussed reads/ writes
+instead of full collection scan; can direct the queries to a particular server
+-- multiple servers which can handle the writes
+-- high avialability
+
+Different players in sharding
+-- shard server
+   -- Replica set
+   -- hold the data
+   -- Multiple shard servers
+   
+-- config server
+   -- Replica set
+   -- hold the metadata
+   -- Only one per cluster
+   
+-- mongos
+	-- Stateless router
+  -- handle the queries from the client
+  -- Multiple mongos instances
+  -- Best practice : For each app server, there will be a corresponding mongos
+  
+data
+-- select the shard key
+	-- hash based; range based 
+
+Range based sharding
+set of consecutive shard keys with their docs -- chunk
+chunk size -- 64mb (default size)
+chunk size can be configured
+64mb -- not hard bound; 
+chunk size > 64 mb -- jumbo chunk
+whenever chunk size > configured size -- automatically split it into 2 chunks
+manually splitting of chunks is also possible
+
+chunk size -- common for all the chunks
+
+chunks will be spread across the shard servers
+
+emp collection
+empId - shard key(range)
+
+config server -- store the following metadata
+1 to 100 --> chunk1
+101 to 300 --> chunk2
+301 to 700 --> chunk3
+701 to max key --> chunk4
+
+Balanced distribution for 2 shards
+shard1 --> chunk1, chunk2
+shard2 --> chunk3,chunk4
+
+1. Distribution of data in the chunks is automatic
+2. Manually splitting of chunks is possible
+3. Merge 2 chunks to form a single chunk -- not possible
+4. Chunk migration from one shard to another shard -- automatically
+5. Migration happens whenever an uneven distribution
+6. Disble or enable migration; Enable migration during maintanence period
+7. Remove a shard -- during maintanence period
+8. estimate the chunk migration time -- not exactly possible
+9. Balancer -- do the migrations
+
+shard1(PSS) -->  chunk1, chunk2,chunk3
+shard2(PSSSS) --> chunk4 
+Difference in the number of chunks between 2 shards > threshold value
+
+read op: db.emp.find({empId:105})
+client --> mongos --> ask the config server for the metadata for this query -->
+config server return the metadata to mongos that the required data in chunk2 in shard1
+--> mongos will direct the query to only shard1 for the required data --> 
+--> shard1(PSS); readPreference --> based on readpreference will direct the query to its respective member
+shard1 will return the data to mongos 
+--> mongos will return the data to the client
+
+read op on a non shard key
+client -->mongos --> conatct the config server
+--> config server will return no info because the query on a non shard key
+--> mongos will broadcast teh query to all shards
+--> shards will perform the op on its data and return the result set the mongos
+--> mongos merges the various result sets and sends it to the client
+
+
+mongodb tool
+mongod server -- deamon server
+mongos -- stateless router (not a server; not a replica set) 
+
+Install mongos as part of the same system as the app server
+
+queries on the shard key -- maximum queries -- sharding beneficial
+
+sharding can slow down the queries
+Add shard servers and remove the shard servers -- based on traffic to the application or  other requirements
+
+Set up sharded deployment
+
+Shard1(PSS)
+2001,path to data1 , shardrs1,clusterRole: shardsvr
+2002,path to data2 , shardrs1,clusterRole: shardsvr
+2003,path to data3 , shardrs1,clusterRole: shardsvr
+
+mongod -f "path to mongod1.conf"
+
+Open a new terminal and connect to one of the above servers from mongo shell
+mongo --port 2001
+
+Initiate the replica set
+rs.initiate({
+_id:"shardrs1",
+members:[
+{_id:0,host:"localhost:2001"},
+{_id:1,host:"localhost:2002"},
+{_id:2,host:"localhost:2003"}
+]
+})
+
+
+
+Shard2(PSS)
+2004,path to data4 , shardrs2,clusterRole: shardsvr
+2005,path to data5 , shardrs2,clusterRole: shardsvr
+2006,path to data6 , shardrs2,clusterRole: shardsvr
+
+mongod -f "path to mongod1.conf"
+
+Open a new terminal and connect to one of the above servers from mongo shell
+mongo --port 2004
+
+Initiate the replica set
+rs.initiate({
+_id:"shardrs2",
+members:[
+{_id:0,host:"localhost:2004"},
+{_id:1,host:"localhost:2005"},
+{_id:2,host:"localhost:2006"}
+]
+})
+
+
+Config server
+2007,path to data7 , cfrs1,clusterRole: configsvr
+2008,path to data8 , cfrs1,clusterRole: configsvr
+2009,path to data9 , cfrs1,clusterRole: configsvr
+
+mongod -f "path to mongod1.conf"
+
+Open a new terminal and connect to one of the above servers from mongo shell
+mongo --port 2007
+
+Initiate the replica set
+rs.initiate({
+_id:"cfrs1",
+members:[
+{_id:0,host:"localhost:2007"},
+{_id:1,host:"localhost:2008"},
+{_id:2,host:"localhost:2009"}
+]
+})
+2007 -- primary server of config server
+
+Setup the mongos router:
+//mongos is going to run at port -- 3001
+mongos --port 3001 --configdb cfrs1/localhost:2007
+
+Open a new terminal and connect to mongos
+mongo --port 3001
+// Create the connection b/w shard servers and mongos
+
+mongos>sh.addShard("shardrs1/localhost:2001");
+
+mongos>sh.addShard("shardrs2/localhost:2004");
+
+Number of mongos -- 1
+If mongos is down;  reads/ writes will fail
+Multiple number of mongos;
+Each app server, one mongos 
+
+mongos --> 2007;// wrong
+mongos(3001) as a standalone router connected to config server : cfrs1 : 2007,2008,2009
+mongod -- deamon server
+
+A new process where mongos will run; host -- localhost
+//mongos --port 4001 --connected to config server : cfrs1 : 2007,2008,2009
+
+chunks
+data
+shard key
+
+use shardingDb
+Enable sharding at the database level
+sh.enableSharding("shardingDb")
+
+Create the collection
+db.emp.insertOne({empId:101,empName:"sara"})
+Create the zipcode collection and import the data 
+
+select the shard key
+-- field should exist in each doc
+-- not be changing
+-- high cardinality; low frequency
+
+_id as shard key
+-- limitations:
+percentage of queries on _id : 5%
+95% -- did not use _id
+
+loc cannot be shard key -- array -- index -- multi key index
+
+pop -- large cardinality, low frequency ; not a ideal choice
+
+state, city -- ideal candidates for shard key
+
+based on queries to the app ---> state -- shard key
+
+shard key -- queries -- max queries -- reads/ writes faster
+
+shard the collection
+db.zipcode.createIndex({state:1})
+sh.shardCollection("shardingDb.zipcode",{state:1})
+
+Manually split the chunks
+1. splitAt
+sh.splitAt("shardingDb.zipcode",{state:"AK"})
+the chunk which has the doc which satisfies the given condition will be split into 2 chunks
+
+sh.splitAt("shardingDb.zipcode",{state:"MA"})
+
+2. splitFind
+sh.splitFind("shardingDb.zipcode",{state:"NH"})
+split the chunk which has the doc which satsifies the given condition into 2 equal halves
+
+
+
+
+
+
+
+
+  
+  
+  
+  

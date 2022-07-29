@@ -1,0 +1,456 @@
+Replication :
+-- same data in different servers
+-- availability of data; eventual consistency;
+-- write operation -- performed across all the servers -- sync
+
+Replica set -- set of nodes have the same data
+-- one node will act as primary
+-- many secondary nodes
+-- odd number of nodes in a Replica set
+-- maximum 50 members in a replica set; only 7 can be eligible to vote
+
+Each server properties: priority, votes
+priority -- positive integer (>=0)
+votes - 0 or 1
+
+Different types of server
+Primary
+-- Only 1 primary per replica set
+-- default handle reads/ writes
+-- priority > 0
+-- Votes - 0 or 1
+-- write operation -- primary will perform the write on the data which it has
+	-- make a entry of the write op in its own oplog(special capped collection)
+  
+Secondaries
+-- Multiple secondaries
+-- configure to handle reads
+-- asynchronously based on the timestamp of write operation copy primary's oplog into their own oplog's so that they can perform the write op on the data which they hold
+
+
+Type of secondaries:
+1. Normal secondary 
+	-- Priority : > 0; (can become primary)
+  -- Votes - 0 or 1
+  
+2. Zero priority secondary
+-- Priority : 0 
+-- can never become primary
+-- votes 0 or 1
+-- Sync with the primary
+
+3. Hidden secondary:
+-- Sync with the primary
+-- Priority - 0;
+-- Hidden from the client
+-- cannot handle reads as well
+-- votes 0 or 1
+-- Preparing reports; create indexes;
+-- hidden: true
+
+4. Delayed secondaries:
+-- sync with the primary after a configure delay
+-- priority - 0 
+-- cannot become the primary
+-- votes 0 or 1
+-- will not handle reads
+-- act as a backup source;errors
+-- slaveDelay: number of seconds after which it has to sync
+
+Arbiter:
+-- Will not hold any data; not going to sync with the primary
+-- priority :0 ; should never become data
+-- votes : 1
+-- play a important role in election process; break the tie
+-- min infrastructure
+
+Replica set -- 1 primary server 
+Primary -- elected member
+eligible secondary (priority > 0) can become the primary
+voting members will vote for the candidates and elect the primary
+
+Election process:
+-- candidates :
+	** all the eligible secondaries (priority > 0 ) can take part in the election
+  ** the secondaries should have synced completely
+-- all the voting members(votes =1) in the vote;
+
+1. members with the highest priority will call for the election
+2. member with the highest priority will the election
+3. if there is a tie at step 2: select the member who has been the primary in the past
+4. if there is a tie at step 3: voting members will vote amd the member with the majority wins
+5. if there is a tie at step 4: arbiter if present will break the tie
+6.  if there is a tie at step 4: no arbiter if present; round robin process will be used and one of the members from step 4 would be picked up
+
+Replica set of 7 members 
+all have votes 1 : n1(5),n2(5),n3(0),n4(3),n5(5),n6(0),n7(arbiter)
+
+step 1: n1,n2,n5 will call for the election
+step2 : tie between 3 members n1,n2,n5
+step3: 
+scenario1 : lets say n2 has been a primary in the past
+-- n2 will become the primary
+scenario 2: none of the 3 nodes n1,n2,n5 have been a primary in the past
+or all the 3 nodes have been a primary in the past
+
+step 4: tie at step 3:
+Candidates: n1,n2,n5
+Voting members : n1 - n7 ( 7 voting members)
+Scenario 1:
+n1 - 5; n2-1 ; n5- 1
+n1 has got majority -- n1 wins
+
+Scenario 2:
+n1 -3; n2-3 ; n5 -1
+tie between n1 and n2; 
+Step 5: tie at step 4 : n1 and n2;
+arbiter votes: lets say for n1(random)
+primary -- n1
+
+Step 6: tie at step 4: n1 and n2;
+lets say no arbiter: round robin process: 
+may be n1 will become primary
+
+When all does election happen
+1. When the replica set is initiated for the first time
+	all the members will be added as a secondary 
+2. when the primary goes down
+3. whenever the RS is reconfigured
+4. whenever a new member with the highest priority is added
+
+port number -- has no role in elections
+server infrastructure -- has no role in elections
+
+deployment -- keep in mind the nodes which can become primary
+eligible secondaries -- similar hardware setup to handle writes when it becomes the primary
+
+primary -- which will have to take up the maximum load -- handle writes
+
+n1(1),n2(2),n3(3),n4(4),n5(5),n6(0),n7(arbiter)
+clear winner : n5 -- primary
+n5 is down -- n4 will become primary
+
+Deployment -- 2 countries India, malaysia
+primary to be in india:
+n1,n2,n5 ,n6 -- India
+n3,n4,n7 -- Malaysia
+
+n1 -- goes down; n2 or n5 -- both are in India -- 
+
+
+convert a replica set member to a standalone server : perform all operation
+write operations on standalone server
+convert a standalone to a member of replica set -- secondary member -- standby
+
+secondary member -- try to (partial)sync with the primary; fail;
+perform full sync: (time intensive task)
+delete all of its data ; 
+clone the primary server's data; 
+check the oplog of primary for any recent writes and sync if necessary
+change the status to secondary and healthy
+
+oplog -- rolling special capped collection
+oplog -- configure the size; min retention period(configure)
+
+2 days to clone and primary oplog -- retention period -- 1 day
+what has the sec synced -- 2 days old data; oplog -- previous one day data
+-- not able to sync -- do the initial full sync-- 
+
+Replica set Deployment:
+
+PSA
+	-- arbiter (min configuration) -- low cost ; break the tie
+  -- odd number of members
+  -- sync has to happen between 2 members; write op is comparitively faster;
+  -- consistency is more important than availability
+  -- write intensive app
+  
+  
+PSS
+  -- 3 members; data written in all the 3 members;
+  -- sync has to happen between 3 members
+  
+Synchronisation -- streams of data which will be copied from primary to sec
+  
+Automatic failover:
+PSS 
+n1(10),n2(5),n3(4)
+
+Replica set is initiated -- n1 becomes primary
+
+n1 goes down
+election will happen
+candidates -- n2 and n3;
+n2 -primary
+n1 -- comes up
+n1 -- try to sync with the primary; once it has completely synced(n2);
+call for the election; will win the election -- n1 -- primary
+
+n1 -- primary;
+n3 -- goes down ; sec goes down; no elections
+n3 comes up -- no election; n3 -- secondary
+
+n1 -- primary
+rs.stepDown(24*60*60); 
+// for 24 hours the current primary will step down to a secondary and cannot becme the primary for 24 hours
+// if n1 should not become the primary ; change the priority of n1 < priority of n2
+//
+
+reconfig -- manually -- happen at that second; there is a proper primary
+
+heartbeat -- every 2 sec; all the members exchange a heart baet with all the members
+for 10 secs if there is no heartbeat -- means that node is down
+
+election process -- 12 seconds
+
+during the election -- writes fail
+drivers -- automatically retry once
+
+
+replication lag:
+lag which the secondary is having currently with respect to the sync
+Monitoring
+
+Syncing
+-- sec will sync with the primary
+-- chainingAllowed : true; sec can sync with another fully synched sec
+
+write operations in a replica set and consistency
+
+write operation: there will be a write concern:
+write concern 
+	-- this can be specified at the query level or at the connection string level
+  -- number 1 ,2 or ... n where n is number of members in the replica set
+  -- or majority ; if there are 7 members in REPlica set; majority : 4
+  
+Lets say we have 7 member RS
+write concern :1
+--> client --> write op --> directed to the primary --> perform the write on its data and make an entryin oplog-->
+send the acknowledgment to the client --> other secondaries(6) will async sync with the primary
+
+write concern :2
+--> client --> write op --> directed to the primary --> perform the write on its data and make an entry in oplog-->
+as soon as one secondary (any of the secondaries)  completes the sync
+-->send the acknowledgment to the client
+--> other secondaries(5) will async sync with the primary
+
+write concern :3
+--> client --> write op --> directed to the primary --> perform the write on its data and make an entry in oplog-->
+as soon as two secondaries (any of the secondaries)  completes the sync
+-->send the acknowledgment to the client
+--> other secondaries(4) will async sync with the primary
+
+write concern :n ; n=7
+--> client --> write op --> directed to the primary --> perform the write on its data and make an entry in oplog-->
+as soon as 6 secondaries (any of the secondaries)  completes the sync
+-->send the acknowledgment to the client
+
+write concern :majority (4)
+--> client --> write op --> directed to the primary --> perform the write on its data and make an entry in oplog-->
+as soon as 3 secondaries (any of the secondaries)  completes the sync
+-->send the acknowledgment to the client
+--> other secondaries(3) will async sync with the primary
+
+secondary selection is not possible for writes: asynchronously sync with the primary 
+
+Best practice : write concern : majority
+write concern:1
+write concern:2: 
+	-- faster; 2 nodes have to complete the write op; 
+  primary; secondary(same data center or different data center)
+  -- probability of reading stale data: 5/7
+  
+write concern:3
+
+write concern:n
+-- all the nodes have to complete the write operation;
+-- write timeout -- all the nodes have to complete the write op
+-- if one of the nodes(sec) is down; writes will start failing
+-- writes may fail even if one of the secondaries is down; acknowledgement -- write has failed
+
+
+write concern:majority:(n/2)+1
+-- best practice
+-- 4 nodes will do the sync --> ack sent
+-- write op -- somewhat faster
+-- probabilty of reading stale data : 3/7;
+-- best consistency possible
+-- majority -- dynamic based on number of members in RS
+
+data center1 -- go down;
+data center 2 -- eligible sec will become primary -- handle writes
+wc:2; primary and one of the sec(data center2) will complete the write first
+
+
+Scenario: 7 member Rs(n1... n7); n1 -- primary
+write concern :2
+db.emp.updateOne({empId:101},{$set:{salary:1000}});
+
+write op --> n1,n2 has completed --> ack sent to the client
+n3,n4 have completed; n5,n6,n7 are in the process
+read op at the same time;
+
+Example 1:
+read --> n1 ; salary: 1000
+
+Example 2:
+read --> n2 ; salary: 1000
+
+Example 3:
+read --> n5 ; salary: old value
+client -- stale data
+
+
+
+Scenario: 7 member Rs(n1... n7); n1 -- primary
+write concern :2
+-- faster
+n1,n2 have completed --> ack sent to the client
+lets say that n1 and n2 goes down before any other secondary can sync
+n3 -- primary; operation continue
+write op --> data lost with respect to write ; n1 and n2 are down ;
+n1 and n2 come up ; n3 -- primary; sync with n3 and lose its data(write);
+client -- write successful;
+probability of loss of data -- very data
+
+availability of data(highest priority) or write time(compromised): write concern : majority
+write concern -- query level; conn string level
+bulk load -->  wc:1; 
+
+wc:2; 2 nodes have to complete the write op (synchronous process)
+
+
+
+Mongodb : eventual consistency; 
+
+
+
+replication
+
+3 member replica set:
+db folders: data1,data2,data3
+port numbers: 1001,1002,1003
+log file: data1/mongod.log
+replica set name : rs1
+
+
+Connect to one of the servers -- mongo shell
+//Open a terminal
+mongo --port 1001
+//Initiaite the replica set
+rs.initiate({
+_id:"rs1",
+members:[
+{_id:0,host:"localhost:1001"},
+{_id:1,host:"localhost:1002"},
+{_id:2,host:"localhost:1003"},
+]
+})
+
+Default priority :1; votes:1
+rs.status()
+
+rs.config()
+
+
+RS -- 3 members
+write concern: majority : 2 members
+2 members completed the write and then got the acknowledgement
+
+read -- default primary
+reads -- sec -- configure
+rs.secondaryOk() -- at a server level
+at the connection string level
+
+secondaries -- synced with the primary
+rs.printReplicationInfo()
+rs.printSecondartReplicationInfo()
+
+3 member replica set PSS
+bulk write wc:1 ;1 million docs insert
+primary has completed ; ack -- sent
+secondaries are trying to sync;
+because of some reason : lag > 30 secs
+primary will have to get a ticket to take up writes; writes -- slower
+ack will also become slower
+number of writes in control; and reduce lag < 30 secs
+once lag < 30 secs; no ticketed writes
+
+slow running queries:
+1. identify the cause:
+-- collscan ; solution -- indexes
+-- locks --; identify deadlock; db.coll.stats();kill the operation
+-- primary is down
+-- sec replication lag > 30 sec; primary -- tickets
+
+users -- slowness -- replication lag; more than 30 hours; PSS(wc:majority) --> PSS (wc:1)
+--> PSA (wc:majority)
+
+write intensive app 
+PSS(wc: majority) - 2 nodes have to complete the write op; 1 node will do async;
+1 node was in sync; 1 node was having replication lag
+syncing -- lot of write (streaming, network); 
+replication lag -- hours
+read op --> very stale data
+Trigger point --
+1. ticketing: not a sustainable solution; lag is in hours
+2. PSS(wc:1); // only primary will complete; then 2 nodes have to sync;  much worser scenario
+set up failed
+-- 2 nodes have replication lag(hours)
+-- ticketing would come in
+probability of stale data read : 2/3;
+-- reads handled by primary; 
+3. PSA (wc:majority)
+Arbiter -- no data; no sync;
+wc:majority : 2 nodes have to complete; PS; ack will be sent
+any replication lag -- 0
+-- limitations
+lets say the secondary go down -- wc:majority will fail; all the writes will fail
+-- none of the servers(PS) go down 
+lets say primary goes down -- -- wc:majority will fail; all the writes will fail;
+single sec will become primary ; but still writes will fail
+
+sharding the data
+-- 2 shards; 2RS;2 primary servers
+-- 2 servers which can handle the writes
+-- load on each primary is lesser
+-- data which sec has to be replicate will be lesser;
+-- control replication lag to a great extent
+-- queries (majority on shard key)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

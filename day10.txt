@@ -1,0 +1,288 @@
+Sharding
+splitAt
+splitFind
+
+default chunk size -64mb (6.0 -- 128mb)
+
+chunk -- consecutive set of shard keys with their docs
+shard key -- asc index; hashed index 
+hashed based sharding -- shard key ObjectId, timestamp; even distribution of data
+collection size < chunk size
+collection has fit in a single chunk
+
+Chunk splitting
+-- Automatically
+  chunk size > 64 mb; split into 2 equal chunks
+  inserts/updates -- chunk size increase
+-- Manually
+   split the chunks manually
+   splitAt -- split the chunk which has satisfied the condition at the exact doc which has satsified the condition
+   sh.splitAt("shardingDb.zipcode",{state:"RI"})
+-- splitFind
+	divide the chunk into 2 nearly equal halves on basis of the chunk which has the doc which satisfied the condition
+   sh.splitFind("shardingDb.zipcode",{state:"NH"})
+   
+   
+Profiler
+-- logs of all the operaions(reads/writes) to the server
+-- system.profile --> capped collection
+Levels
+0- default -- no profiling
+1 -- only those queries which have taken more than slowMs time for execution
+slowMs -- 100ms;(configure)
+queries which have more than 100 ms to execute 
+2 -- all the queries
+
+db.getProfilingStatus();// get the current status of profiler
+
+db.setProfilingLevel(2)
+
+1. db.zipcode.find().sort({state:-1})
+written 2 queries -- no result
+2. db.restaurant.find({cuisine:"American ",borough:"Bronx"})
+
+3. db.restaurant.createIndex({borough:1})
+
+4. db.employee.insertOne({empId:777,empName:"Jack"})
+
+After enabling the profiler, depending upon the level, the queries will be logged in the profiler
+
+find the slow running reads which are taking 2 ms to execute:
+db.system.profile.find({op:"query",millis:{$gt:2}})
+
+profiler -- completed queries
+currentOp -- currently running operations
+what sessions which had slow running queries
+
+what are the currently running operation
+db.currentOp();
+// indexes in background, queries in process of execution
+
+db.setProfilingLevel(1,{slowms:1})
+
+db.employee.insertOne({empId:777})
+db.zipcode.find().sort({pop:1,city:-1})
+
+Identify all the queries which have a full collection scan
+db.system.profile.find({planSummary:"COLLSCAN"})
+
+Display the top 5 slow running queries
+db.system.profile.find().sort({millis:-1}).limit(5);
+
+Identify the slow running queries in the emp collection
+db.system.profile.find({ns:"dellDb.employee"}).sort({millis:-1}).limit(5);
+
+ 
+Locks:
+2 or 4
+
+db.zipcode.createIndex({city:1})
+Process of creating index:
+Locks:
+-- lock -- yield to higher priority tasks
+
+index shared lock on zipcode
+write query on zipcode
+index will yield the lock to write operation
+after the write op, index creation will get the lock again
+process the sides write table -- lock once
+process the constraint violation table -- lock once
+Read lock -- 4
+
+more the locks -- more the millis
+
+profiler -- 
+2 ways 
+1. db.setProfilingLevel
+2. in the config file
+
+Replica set 3- P(n1)S(n2)S(n3)
+readPreference : secondaryPreferred
+profiler with level -2
+read op --> n3(secondary)
+n3's profiler -- log of read op
+n2's profiler -- log of read operation -- No
+
+profiler -- server level
+
+oplog -- copied/synched
+system.profile -- not copied
+write op 
+--> n1,n2,n3's profiler
+3 servers may take different times for execution
+
+n1,n2,n3 -- RS
+n2 -- crashed -- slow query running / shutdown
+n2 -- reason for the crash from n1/n3 -- NOt possible
+
+primary -- oplog -- slow queries; 
+
+scenario: 
+bulkInsert on Primary
+-- replicationLag -- high
+kill the currently running bulk insert on primary
+delete the collections 
+
+oplog sync -- based on timestamp of operation
+secondaries -- bulkInsert; deletion next
+
+bulkInsert -- no rollback;
+1000 docs
+at 450 doc -- kill the op
+450 inserts will stay
+
+Rollbacks 
+Limitation -- size 
+PSS --
+write op; wc: 1
+primary has completed -->success ack has sent --> primary goes down but none of the secondaries have synched --> data written is lost
+former primary comes up -- joins the replica set again as secondary; do "rollback" -- write operations -- BSON file--> dbpath/rollback/collection/removed<tm>.bson
+operation state of member: ROLLBACK
+admin -- take care of the rollback
+
+Avoid this situation: wc: majority
+P+ number of sec--> count for majority
+
+wc: majority;RSS ; 2
+write op
+Primary has finished writing; primary goes down; none of the sec have synched -- failure ack to the client;
+eligible sec becomes the primary
+former primary comes up -- joins the replica set again as secondary; do "rollback" -- write operations -- BSON file--> dbpath/rollback/collection/removed<tm>.bson
+operation state of member: ROLLBACK
+Ignore the rollback -- admin
+
+Copy a db
+rename a db
+replicating a collection;
+
+insert into orders values(101,"sara");
+//parallely implicitly insert into transaction table -- insert trigger; procedure or function
+Mongodb:
+1. no stored procedures ; kind of op -- different servers will handle
+2. triggers -- atlas (cloud version)
+3. transaction in the latest version:
+
+materialised views -- mongodb
+Store the data -- bson
+
+bson datatype -- ObjectId
+json -- no ObjectId
+
+Import or export data:
+Import data -- json/csv
+export the data -- json/csv
+Disadv:
+1.bson converted--> json (loss of data)
+2. While import/export is happening, if there are any writes -- they will not get exported;
+3. Oplog entries are not going to be exported
+4. Metadata ; indexes -- not exported
+
+Back up and Restore:
+-- back up of data in bson format
+-- back up at server, db or collection level
+-- back up of metadata; various indexes are there; creation order
+-- backup of oplog also
+
+Restore 
+-- restore from bson dump
+-- restore entire server or db or collection
+-- restoration -- create the indexes from backed up metadata
+-- restoration -- replay the oplog entries so that thw rite during the backup will also be available
+
+Ops manager/ cloud manager /atlas/percona
+-- point in time recovery
+-- incremental backup 
+
+mongo restore of only the data and not the indexes 
+-- yes and no
+-- no ; mongo restore -- restore the collectiona nd create the indexes
+-- yes -- without the indexes ; delete the indexes in the json file which u don't want
+
+mongodump --db dellDb --collection zipcode --out "path to the dump folder"
+
+mongorestore /home/rps/Desktop/myDump/dellDb/zipcode.bson --db dellDb --collection zipcode
+
+
+--oplog
+--> back up of only those entries in oplog which happened during the backup
+-> ONly when taking a backup from a replica set
+--> writes which are happening parallely when i am taking backup -- hot backup
+
+backup --> at a particular time;
+backup(data and oplog) has completed(11:01);insert is completing(11:02) -- data will not be there in backup
+
+restore
+--oplogReplay
+--> restore the collection
+--> perform the operations in oplog in dump folder;
+--> 
+cold backup -- shut down the server; take the backup; --oplog is not necessary
+
+back up of 6 months-- 
+back up for 3 years;
+back up of emp last 6 months ; doj
+mongodump --db dellDb --collection emp --query={doj:{$gt:new Date(2022,0,1)}} --out "path"
+
+When to change the oplog size:
+1. PSSSSSS deployment
+delayed secondary : 24 hours
+write intensive app
+oplog size : 256 mb
+
+Walmart black friday sale
+writes -- 10X
+oplog -- size is grow relatively
+delayed sec -- work correctly -- data for 24 hours
+-- increase the oplog size -- hold th data for 24 hours
+
+replication Lag -- very huge
+increasing the oplog size: more number of entries
+
+modifying the oplog size -- performance intensive task
+
+oplog size -- 256Gb -- not a hard limit
+oplog file can grow beyond 256GB;
+
+oplog doc -- rotated
+1. oplog size > configured size and
+2. minRetention period -- minimum time for which the docs should exists
+
+If i have s delayed secondary with delay for 24 hours
+, set the min retention period to 26 hours
+
+oplog size -- 256gb; minRetention -- 2 hours
+PSS deployment
+primary has written has 300gb of data in its oplog; and its more than 2 hours and none of the secondaries have synced
+wc: 1; 
+-- loss of data -- no;
+sec -- try to sync(wrt timestamp); it wants a particular data(oplog) which has been rotated-- not there; delete the data in its server and perform a full sync with the primary data
+
+wc:majority
+ 
+
+data vs performance
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+   
+   

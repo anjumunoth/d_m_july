@@ -1,0 +1,309 @@
+Replication
+
+3 member Replica set:
+1. Initiate the replica set
+1001 -- P1 
+1002 -- P1
+1003 -- P1
+2. Election process
+1001 -- primary
+highest priority member will call for election
+member with the highest priority wins: 3 members have the same highest
+member who has been primary in the past -- none
+voting -- comes in 
+candidates -- 3 members
+voting -- 3 members
+chances of majority -- very bleak;
+if there is a tie: round robin process -- 1001 -- primary
+
+3. Secondary goes down
+reads /writes -- not affected
+
+health of server :0
+state: 8 ; not reachable/healthy
+
+RS: 3
+wc:1 one member has to complete the write; Primary has completed
+wc:2: Primary and one sec has to complete; ack sent to the client
+wc:3: primary and 2 sec have to complete; one sec is down ; writes will fail
+
+PS deployment -- ready to face the consequences
+
+PSA deployment -- n1,n2,n3(Arbiter)
+wc:majority;
+Scenario 1: n3 is down; write op --> successful
+Scenario 2: n2 is down; n1,n3 are up; write op --> fail; there are no 2 healthy writeable members
+wc:1; 
+
+Write concern -- mandatory
+-- 1...n where n is number of members in RS or majority
+-- set up at the replica set level
+-- give it at the time of query(more priority)
+
+
+Primary goes down
+-- identify that the primary is down(max 10 sec)
+-- start the election process( max 10 sec)
+-- eligible sec becomes the primary
+-- former primary when it comes up -- sync with the current primary
+-- and if former primary has a priority > current primary -- can call the election
+
+First primary : 1001
+1001 went down
+Primary : 1002
+1002 go down
+Primary : 1001
+
+
+rs.secondaryOk() -- for each session
+connection string -- configure the sec for reads -- one time process
+
+Add a new member -- zero priority member
+1004
+data4
+rs1
+
+sudo mongod --config path to mongo4.conf
+Open a new terminal
+Connect to the primary
+mongo --port 1001
+rs.add({host:"localhost:1004",priority:0})
+
+Add a new member -- member with a higher priority:
+-- sync with the primary; call for elections
+-- elections will happen 
+-- this member becomes primary
+data5; 1005;rs1
+sudo mongod --config path to mongo5.conf
+Open a new terminal
+Connect to the primary
+mongo --port 1001
+rs.add({host:"localhost:1005",priority:10})
+
+Change the configuration details 
+-- change the priority of a particular member
+
+var myConfig=rs.config()
+myConfig.members[1].priority = 5;
+myConfig.members[1].votes =0;
+rs.reconfig(myConfig)
+
+
+Remove 1003
+Connect to the primary
+rs.remove("localhost:1003")
+
+priority >=1 ; votes : 1
+priority >=1; votes : 0 ; -- not possible
+votes :1; priority: 0 -- yes
+
+Add an arbiter
+
+data6; 1006;rs1
+sudo mongod --config path to mongod6.conf
+Open a new terminal
+Connect to the primary
+mongo --port 1001
+rs.addArb("localhost:1004")
+
+Add a hidden member:
+-- not visible to the client
+-- cant handle the reads
+-- sync with the primary
+-- should never become the primary
+data7; 1007;rs1
+sudo mongod --config path to mongod7.conf
+Open a new terminal
+Connect to the primary
+mongo --port 1005
+rs.add({host:"localhost:1007",hidden:true,priority:0}
+use case
+-- generate reports; quick -- huge volumes of data
+-- take up a backup of data
+
+Change it to a normal sec with priority 0;
+var myConfig=rs.config();
+myConfig.members[6].hidden=false;
+//myConfig.members[6].priority=4;
+rs.reconfig(myConfig)
+
+
+
+Add a delayed member:
+-- cant handle the reads
+-- sync with the primary after a delay
+-- should never become the primary
+-- first time -- full initial sync with the primary 
+-- after 300 secs it will go and do syncing (300sec old data)
+-- use case 
+can be used for data recovery after human errors/ corruption
+data8; 1008;rs1
+sudo mongod --config path to mongod8.conf
+Open a new terminal
+Connect to the primary
+mongo --port 1005
+rs.add({host:"localhost:1008",secondaryDelaySecs:300,priority:0})
+
+Manually stop certain replication to certain secondary 
+-- without shutting down -- no;
+-- replication -- async ;implicitly
+
+client --> connect to replica set --> driver --> identify the type of query; writeconcern, readpreference
+
+client write op--> connect to replica set --> driver --> identify the type of query -- write; writeconcern -- majority
+--> driver will direct the query to the primary--> based on wc do the necessary--> ack sent
+
+
+Read operations:
+readPreference: 
+1. primary --- reads will be handled only by primary
+ if primary is unavialable -- reads will fail
+2. secondary -- reads will be handled only by secondaries(exclude arbiter,delayed,hidden)
+if all the secondaries are down -- reads will fail even if primary is up
+3. primaryPreferred -- reads will be first sent to the primary; if primary is unavialable; secondaries can handle the reads
+4. secondaryPreferred -- reads will be first sent to secondaries(exclude arbiter,delayed,hidden); if none of the secondaries are avilable; then go the primary
+5. nearest -- read from the nearest server(primary or secondary)
+
+best practice : secondaryPreferred
+
+full consistency for read : primaryPreferred;data will always be consistent
+
+readPreference :
+-- mention it as part of connection string
+mongodb://localhost:1001?replSetname=rs1&readPreference=secondaryPreferred
+-- read query (more priority)
+db.zipcode.find({state:"Ak"}).readPreference("secondary")
+
+rs.secondaryOk()-- only available in the shell
+shell - connecting to a particular member of replica set
+
+client read op--> connect to replica set --> driver --> identify the type of query
+-- read; readPreference
+-- > based on the read preference direct the query to that particular server
+
+maxConnections -- for entire replica set; 
+
+latency:
+driver read ; readPreference : nearest
+ping to all the servers(primary or sec);
+server which is pinging back fastest will be the nearest
+
+server -- member of only one replica set
+arbiter -- no;
+dbPath; port; replica set name: string
+
+mongod --dbpath "path to data1" --port 1001 --replSet rs1
+mongod --config "path to mongod1.conf"
+
+directoryPerDB
+ property set -- collection name
+ 
+ community 
+ enterprise server
+ wired tiger
+ in memory storage engive
+ 
+ mmapv1 -- deprecated
+ 
+ RDBMS
+ save point
+ rollback
+ rollback to a particular save point
+ 
+ Oracle
+ update emp set salary=1000 where empid=101
+ commit; // permanent
+ savepoint s1;
+ update emp set salary=2000 where empid=101
+ update emp set salary=3000 where empid=101
+ select salary from emp where empid=101;// 3000
+ rollback to s1
+ select salary from emp where empid=101;// 1000
+ 
+ mongodb
+ standalone
+ write op --> memory --> 60 secs flushed to the disk
+ 
+ there is a checkpoint created
+ 11:00:00 
+ 11:01:00 check point
+ 11:02:00 check point
+ 
+ at 11:00
+ write op --> memory
+ 11:00:25  system shutdown ; memory -- will be lost -- write op (11:00) -- data is lost
+ bad scenario
+ 
+ mongod restarts -- last checkpoint -- try to get the data
+  
+ journalling in mongodb
+ -- reduce the data loss
+ -- enable journaling 
+ -- writeahead log
+ -- write is going to be slower(2 works -- make a journal entry and perform the write)
+ -- can be disabled as well flag : --nojournal
+ 
+ write op --> 1. make an entry of write op in journal(memory); then perform the write op
+ 
+ journal entries -- flushed to the disk every 50ms or if 2gb of data is written 
+ 
+ loss of data -- not avoid -- upto 50 ms 
+ 
+ system shutdown
+ -- last checkpoint and get the data
+ writes between my last check point and time when the system shutdown
+ -- go to journal files and replay the writes which happened in the time between last checkpoint and system shutdown
+ 
+ 
+ replica set
+ 3 member RS; wc: majority; journaling - enabled
+ write op --> 
+ 1. direct to primary server
+ 	-- make an entry in journal of primary server
+  -- write in memory
+  -- make an entry in oplog
+  -- journal(50 ms) and data(60 sec) in memory flushed
+2. direct to one of the seconadries
+  -- copy from primary's oplog to its own oplog
+ 	-- make an entry in journal of secondary server
+  -- perform the write
+  -- write in memory of secondary server
+  -- journal(50 ms) and data(60 sec) in memory flushed to disk
+3. if both are complete; ack sent to the client
+
+oplog -- special capped collection
+
+
+standalone -- no oplog
+write op(insert,update,delete,create db,collection,indexes) --> oplog
+
+mongod --directoryPerDB 
+// for this server; the data is going in different folders in the db path based on the database
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+
+
+"localhost:1007",hidden:true,priority:0
+
+
+
+sudo chmod 777 -R path to data4
+
+
+
+
+
+
+
+
